@@ -8,6 +8,7 @@ void CResponseSolver::SetImageSequence(const std::vector<TImageExposureTime>& ve
 void CResponseSolver::SolveResponse()
 {
 	GenerateCoefficientMatrix();
+	SolveResponse();
 }
 
 cv::Mat CResponseSolver::GetRadianceMap()
@@ -34,7 +35,7 @@ void CResponseSolver::GenerateCoefficientMatrix()
 	m_matCoefficientMatrix = cv::Mat::zeros(iImageNum * iPixelNum + m_iZNumber - 1, m_iZNumber + iPixelNum, CV_32FC1);
 	m_matBiasMatrix = cv::Mat::zeros(m_matCoefficientMatrix.rows, 1, CV_32FC1);
 
-	int iRowStart = 0;
+	int iEquationIdx = 0;
 	for (const auto& tImageSequence : m_vecImageSequence) {
 		const cv::Mat matImage = tImageSequence.matImageFloat * 255.f;
 		const float fExposureTime = tImageSequence.fExposureTime;
@@ -42,16 +43,30 @@ void CResponseSolver::GenerateCoefficientMatrix()
 		for (int iRowIdx = 0; iRowIdx < matImage.rows; ++iRowIdx) {
 			for (int iColIdx = 0; iColIdx < matImage.cols; ++iColIdx) {
 
-				//TODO: fill in coefficients
-				float fPixelIntensity = matImage.at<float>(iRowIdx, iColIdx);
+				float fPixelIntensity = 255.f * matImage.at<float>(iRowIdx, iColIdx);
 				float fWeight = GetWeightedCoefficient(fPixelIntensity);
+				int iPixelIndex = matImage.cols * iRowIdx + iColIdx;
 
+				m_matBiasMatrix.at<float>(iEquationIdx) = fWeight * std::logf(fExposureTime);
+				m_matCoefficientMatrix.at<float>(iEquationIdx, m_iZNumber + iPixelIndex) = -fWeight;
+				m_matCoefficientMatrix.at<float>(iEquationIdx, static_cast<int>(fPixelIntensity)) = fWeight;
 
-
-
-				iRowStart += 1;
+				iEquationIdx += 1;
 			}
 		}
+	}
+
+	m_matCoefficientMatrix.at<float>(iEquationIdx, m_iZMid) = 0.f;
+	iEquationIdx += 1;
+
+	for (int iZVal = m_iZMin + 1; iZVal < m_iZmax; ++iZVal) {
+		float fWeight = GetWeightedCoefficient(static_cast<float>(iZVal));
+
+		int iZIndex = iZVal - m_iZMin;
+		m_matCoefficientMatrix.at<float>(iEquationIdx, iZIndex - 1) = fWeight * m_fRegulizer;
+		m_matCoefficientMatrix.at<float>(iEquationIdx, iZIndex + 1) = fWeight * m_fRegulizer;
+		m_matCoefficientMatrix.at<float>(iEquationIdx, iZIndex) = -2.f * fWeight * m_fRegulizer;
+		iEquationIdx += 1;
 	}
 }
 

@@ -23,6 +23,8 @@ private:
 	cv::Mat m_matRadiance;
 	std::vector<TImageExposureTime> m_vecImageSequence;
 
+	const float m_fRegulizer = 0.1f;
+
 	const int m_iZMin = 0;
 	const int m_iZmax = 255;
 	const int m_iZMid = (m_iZMin + m_iZmax) / 2;
