@@ -1,5 +1,6 @@
 #pragma once
 #include "../include/hdr_imaging_interface.hpp"
+#include "response_solver.h"
 
 class CHDRRecoverByMutiExposure : public IHDRReconstructor
 {
@@ -11,7 +12,9 @@ public:
 	cv::Mat GetHDRImage() override;
 
 private:
+    void SolveResponse();
 
 	std::vector<TImageExposureTime> m_vecImageSequence;
 	cv::Mat m_matHDRImage;
+	CResponseSolver m_ResponseSolver;
 };

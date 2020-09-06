@@ -3,12 +3,13 @@
 void CResponseSolver::SetImageSequence(const std::vector<TImageExposureTime>& vecImageSequence)
 {
 	m_vecImageSequence = vecImageSequence;
+	m_sizeImage = vecImageSequence[0].matImageFloat.size();
 }
 
 void CResponseSolver::SolveResponse()
 {
 	GenerateCoefficientMatrix();
-	SolveResponse();
+	GenerateResponse();
 }
 
 cv::Mat CResponseSolver::GetRadianceMap()
@@ -72,5 +73,23 @@ void CResponseSolver::GenerateCoefficientMatrix()
 
 void CResponseSolver::GenerateResponse()
 {
-	cv::solve(m_matCoefficientMatrix, m_matBiasMatrix, m_matResponseMatrix, cv::DECOMP_SVD);
+    cv::Mat matSolution;
+	cv::solve(m_matCoefficientMatrix, m_matBiasMatrix, matSolution, cv::DECOMP_SVD);
+
+	m_matResponseCurve = cv::Mat{m_iZNumber, 1, CV_32F};
+
+	for (int index = 0; index < m_iZNumber; ++index) {
+	    m_matResponseCurve.at<float>(index, 0) = matSolution.at<float>(index, 0);
+	}
+
+	m_matRadiance = cv::Mat{m_sizeImage, CV_32F};
+	int iPixTotalNum = m_sizeImage.area();
+	for (int iPixIndex = 0; iPixIndex < iPixTotalNum; iPixIndex++) {
+	    int iColIndex = iPixIndex % m_sizeImage.width;
+	    int iRowIndex = iPixIndex / m_sizeImage.width;
+
+	    m_matRadiance.at<float>(iRowIndex, iColIndex) = matSolution.at<float>(iPixIndex + m_iZNumber, 0);
+	}
 }
+
+

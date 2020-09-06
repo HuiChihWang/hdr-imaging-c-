@@ -18,10 +18,11 @@ private:
 
 	cv::Mat m_matCoefficientMatrix;
 	cv::Mat m_matBiasMatrix;
-	cv::Mat m_matResponseMatrix;
 
 	cv::Mat m_matRadiance;
+	cv::Mat m_matResponseCurve;
 	std::vector<TImageExposureTime> m_vecImageSequence;
+	cv::Size m_sizeImage;
 
 	const float m_fRegulizer = 0.1f;
 

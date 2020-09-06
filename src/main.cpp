@@ -50,5 +50,11 @@ std::vector<TImageExposureTime> LoadImageSequence(const std::string& strFolderPa
 int main(int argc, char* argv[])
 {
 	auto vecImageSequence = LoadImageSequence(std::string{ argv[1] });
+
+	auto pHDRImageRecover = CreateHDRRecoverMultiExposure();
+	pHDRImageRecover->SetUpImageSequence(vecImageSequence);
+	pHDRImageRecover->HDRRecover();
+	auto matHDRImage = pHDRImageRecover->GetHDRImage();
+	
 	return 0;
 }

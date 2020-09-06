@@ -17,3 +17,7 @@ public:
 	virtual void HDRRecover() = 0;
 	virtual cv::Mat GetHDRImage() = 0;
 };
+
+typedef std::unique_ptr<IHDRReconstructor> PtrHDRImageRecover;
+
+PtrHDRImageRecover CreateHDRRecoverMultiExposure();
