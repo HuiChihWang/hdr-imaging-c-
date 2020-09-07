@@ -1,6 +1,6 @@
 #pragma once
 #include "../include/hdr_imaging_interface.hpp"
-#include<Eigen/SparseCholesky>
+#include<Eigen/SparseQR>
 
 class CResponseSolver
 {
@@ -15,19 +15,21 @@ public:
 private:
 	float GetWeightedCoefficient(float fIntensity);
 	void GenerateCoefficientMat();
-	void SolveSparseLinearSystem();
+	bool SolveSparseLinearSystem();
 	void GenerateResponse();
 
 	Eigen::SparseMatrix<float> m_spMatCoefficient;
 	Eigen::VectorXf m_vecBias;
 	Eigen::VectorXf m_vecSolution;
-	Eigen::VectorXf  m_vecResponseCurve;
+
+	Eigen::MatrixXf m_matResponseCurve;
 
 	cv::Mat m_matRadiance;
 
 	std::vector<TImageExposureTime> m_vecImageSequence;
 	cv::Size m_sizeImage;
 
+	int m_iCurrentChannel = 0;
 	const float m_fRegulizer = 0.1f;
 
 	const int m_iZMin = 0;

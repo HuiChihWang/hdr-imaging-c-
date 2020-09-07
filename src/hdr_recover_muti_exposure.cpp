@@ -12,7 +12,6 @@ void CHDRRecoverByMutiExposure::SetUpImageSequence(const std::vector<TImageExpos
 void CHDRRecoverByMutiExposure::HDRRecover()
 {
 	SolveResponse();
-
 }
 
 cv::Mat CHDRRecoverByMutiExposure::GetHDRImage()

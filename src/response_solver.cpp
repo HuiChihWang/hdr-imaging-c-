@@ -8,9 +8,17 @@ void CResponseSolver::SetImageSequence(const std::vector<TImageExposureTime>& ve
 
 void CResponseSolver::SolveResponse()
 {
-	GenerateCoefficientMat();
-	SolveSparseLinearSystem();
-	GenerateResponse();
+    m_matRadiance = cv::Mat{m_sizeImage, CV_32FC3};
+    m_matResponseCurve = Eigen::MatrixXf(3, m_iZNumber + m_sizeImage.area());
+
+    for (m_iCurrentChannel = 0; m_iCurrentChannel < 3; ++m_iCurrentChannel) {
+        GenerateCoefficientMat();
+        bool bIsSolve = SolveSparseLinearSystem();
+
+        if (bIsSolve) {
+            GenerateResponse();
+        }
+    }
 }
 
 cv::Mat CResponseSolver::GetRadianceMap()
@@ -35,20 +43,18 @@ void CResponseSolver::GenerateCoefficientMat()
 	const int iImageNum = m_vecImageSequence.size();
 	const int iPixelNum = m_sizeImage.area();
 
-
 	m_spMatCoefficient = Eigen::SparseMatrix<float>(iImageNum * iPixelNum + m_iZNumber - 1, m_iZNumber + iPixelNum);
 	m_vecBias = Eigen::VectorXf::Zero(iImageNum * iPixelNum + m_iZNumber - 1);
 
 	int iEquationIdx = 0;
 	std::vector<Eigen::Triplet<float>> vecSpCoefficient;
 	for (const auto& tImageSequence : m_vecImageSequence) {
-		const cv::Mat matImage = tImageSequence.matImageFloat * 255.f;
+		const cv::Mat matImage = tImageSequence.matImageFloat;
 		const float fExposureTime = tImageSequence.fExposureTime;
 
 		for (int iRowIdx = 0; iRowIdx < matImage.rows; ++iRowIdx) {
 			for (int iColIdx = 0; iColIdx < matImage.cols; ++iColIdx) {
-
-				float fPixelIntensity = 255.f * matImage.at<float>(iRowIdx, iColIdx);
+				float fPixelIntensity = 255.f * matImage.at<cv::Vec3f>(iRowIdx, iColIdx)[m_iCurrentChannel];
 				float fWeight = GetWeightedCoefficient(fPixelIntensity);
 				int iPixelIndex = matImage.cols * iRowIdx + iColIdx;
 
@@ -78,27 +84,35 @@ void CResponseSolver::GenerateCoefficientMat()
 	m_spMatCoefficient.setFromTriplets(vecSpCoefficient.begin(), vecSpCoefficient.end());
 }
 
-void CResponseSolver::SolveSparseLinearSystem()
+bool CResponseSolver::SolveSparseLinearSystem()
 {
-	Eigen::SimplicialLDLT<Eigen::SparseMatrix<float>> solver;
-	m_vecSolution = solver.compute(m_spMatCoefficient).solve(m_vecBias);
+	Eigen::SparseQR<Eigen::SparseMatrix<float>, Eigen::COLAMDOrdering<int>> solver;
+
+	solver.compute(m_spMatCoefficient);
+	if (solver.info() != Eigen::Success) {
+        return false;
+	}
+
+    m_vecSolution = solver.solve(m_vecBias);
+    if (solver.info() != Eigen::Success) {
+        return false;
+    }
+
+	return true;
 }
 
 void CResponseSolver::GenerateResponse()
 {
     int iPixTotalNum = m_sizeImage.area();
-    m_vecResponseCurve = Eigen::VectorXf{iPixTotalNum + m_iZNumber};
 
 	for (int index = 0; index < m_iZNumber; ++index) {
-        m_vecResponseCurve(index) = m_vecSolution(index);
+        m_matResponseCurve(m_iCurrentChannel, index) = m_vecSolution(index);
 	}
 
-	m_matRadiance = cv::Mat{ m_sizeImage, CV_32F };
 	for (int iPixIndex = 0; iPixIndex < iPixTotalNum; iPixIndex++) {
 		int iColIndex = iPixIndex % m_sizeImage.width;
 		int iRowIndex = iPixIndex / m_sizeImage.width;
-
-		m_matRadiance.at<float>(iRowIndex, iColIndex) = m_vecSolution(iPixIndex + m_iZNumber);
+		m_matRadiance.at<cv::Vec3f>(iRowIndex, iColIndex)[m_iCurrentChannel] = m_vecSolution(iPixIndex + m_iZNumber);
 	}
 }
 
