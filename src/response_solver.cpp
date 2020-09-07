@@ -8,7 +8,7 @@ void CResponseSolver::SetImageSequence(const std::vector<TImageExposureTime>& ve
 
 void CResponseSolver::SolveResponse()
 {
-	GenerateCoefficientMatrix();
+	GenerateCoefficientMat();
 	GenerateResponse();
 }
 
@@ -28,15 +28,18 @@ float CResponseSolver::GetWeightedCoefficient(float fIntensity)
 	}
 }
 
-void CResponseSolver::GenerateCoefficientMatrix()
+
+void CResponseSolver::GenerateCoefficientMat()
 {
 	const int iImageNum = m_vecImageSequence.size();
-	const int iPixelNum = m_vecImageSequence[0].matImageFloat.total();
+	const int iPixelNum = m_sizeImage.area();
 
-	m_matCoefficientMatrix = cv::Mat::zeros(iImageNum * iPixelNum + m_iZNumber - 1, m_iZNumber + iPixelNum, CV_32FC1);
-	m_matBiasMatrix = cv::Mat::zeros(m_matCoefficientMatrix.rows, 1, CV_32FC1);
+
+	m_spMatCoefficient = Eigen::SparseMatrix<float>(iImageNum * iPixelNum + m_iZNumber - 1, m_iZNumber + iPixelNum);
+	m_vecBias = Eigen::VectorXf::Zero(iImageNum * iPixelNum + m_iZNumber - 1);
 
 	int iEquationIdx = 0;
+	std::vector<Eigen::Triplet<float>> vecSpCoefficient;
 	for (const auto& tImageSequence : m_vecImageSequence) {
 		const cv::Mat matImage = tImageSequence.matImageFloat * 255.f;
 		const float fExposureTime = tImageSequence.fExposureTime;
@@ -48,47 +51,58 @@ void CResponseSolver::GenerateCoefficientMatrix()
 				float fWeight = GetWeightedCoefficient(fPixelIntensity);
 				int iPixelIndex = matImage.cols * iRowIdx + iColIdx;
 
-				m_matBiasMatrix.at<float>(iEquationIdx) = fWeight * std::logf(fExposureTime);
-				m_matCoefficientMatrix.at<float>(iEquationIdx, m_iZNumber + iPixelIndex) = -fWeight;
-				m_matCoefficientMatrix.at<float>(iEquationIdx, static_cast<int>(fPixelIntensity)) = fWeight;
+				m_vecBias(iEquationIdx) = fWeight * std::logf(fExposureTime);
+				vecSpCoefficient.emplace_back(Eigen::Triplet<float>{ iEquationIdx, m_iZNumber + iPixelIndex, -fWeight});
+				vecSpCoefficient.emplace_back(Eigen::Triplet<float>{ iEquationIdx, static_cast<int>(fPixelIntensity), fWeight});
 
 				iEquationIdx += 1;
 			}
 		}
 	}
 
-	m_matCoefficientMatrix.at<float>(iEquationIdx, m_iZMid) = 0.f;
+	vecSpCoefficient.emplace_back(Eigen::Triplet<float>{ iEquationIdx, m_iZNumber / 2, 1.f});
 	iEquationIdx += 1;
 
 	for (int iZVal = m_iZMin + 1; iZVal < m_iZmax; ++iZVal) {
 		float fWeight = GetWeightedCoefficient(static_cast<float>(iZVal));
-
 		int iZIndex = iZVal - m_iZMin;
-		m_matCoefficientMatrix.at<float>(iEquationIdx, iZIndex - 1) = fWeight * m_fRegulizer;
-		m_matCoefficientMatrix.at<float>(iEquationIdx, iZIndex + 1) = fWeight * m_fRegulizer;
-		m_matCoefficientMatrix.at<float>(iEquationIdx, iZIndex) = -2.f * fWeight * m_fRegulizer;
+
+		vecSpCoefficient.emplace_back(Eigen::Triplet<float>{ iEquationIdx, iZIndex - 1, fWeight* m_fRegulizer});
+		vecSpCoefficient.emplace_back(Eigen::Triplet<float>{ iEquationIdx, iZIndex + 1, fWeight* m_fRegulizer});
+		vecSpCoefficient.emplace_back(Eigen::Triplet<float>{ iEquationIdx, iZIndex, -2.f * fWeight * m_fRegulizer});
+
 		iEquationIdx += 1;
 	}
+
+	m_spMatCoefficient.setFromTriplets(vecSpCoefficient.begin(), vecSpCoefficient.end());
+}
+
+void CResponseSolver::SolveSparseLinearSystem()
+{
+	//TODO: change to SPD solver
+	Eigen::LeastSquaresConjugateGradient<Eigen::SparseMatrix<float>> solver;
+	solver.compute(m_spMatCoefficient);
+	m_vecSolution = solver.solve(m_vecBias);
+
 }
 
 void CResponseSolver::GenerateResponse()
 {
-    cv::Mat matSolution;
-	cv::solve(m_matCoefficientMatrix, m_matBiasMatrix, matSolution, cv::DECOMP_SVD);
+	Eigen::SparseSolverBase
 
-	m_matResponseCurve = cv::Mat{m_iZNumber, 1, CV_32F};
+		m_matResponseCurve = cv::Mat{ m_iZNumber, 1, CV_32F };
 
 	for (int index = 0; index < m_iZNumber; ++index) {
-	    m_matResponseCurve.at<float>(index, 0) = matSolution.at<float>(index, 0);
+		m_matResponseCurve.at<float>(index, 0) = matSolution.at<float>(index, 0);
 	}
 
-	m_matRadiance = cv::Mat{m_sizeImage, CV_32F};
+	m_matRadiance = cv::Mat{ m_sizeImage, CV_32F };
 	int iPixTotalNum = m_sizeImage.area();
 	for (int iPixIndex = 0; iPixIndex < iPixTotalNum; iPixIndex++) {
-	    int iColIndex = iPixIndex % m_sizeImage.width;
-	    int iRowIndex = iPixIndex / m_sizeImage.width;
+		int iColIndex = iPixIndex % m_sizeImage.width;
+		int iRowIndex = iPixIndex / m_sizeImage.width;
 
-	    m_matRadiance.at<float>(iRowIndex, iColIndex) = matSolution.at<float>(iPixIndex + m_iZNumber, 0);
+		m_matRadiance.at<float>(iRowIndex, iColIndex) = matSolution.at<float>(iPixIndex + m_iZNumber, 0);
 	}
 }
 

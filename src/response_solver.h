@@ -1,11 +1,12 @@
 #pragma once
 #include "../include/hdr_imaging_interface.hpp"
+#include <Eigen/IterativeLinearSolvers>
 
 class CResponseSolver
 {
 public:
-	CResponseSolver();
-	~CResponseSolver();
+	CResponseSolver() = default;
+	~CResponseSolver() = default;
 
 	void SetImageSequence(const std::vector<TImageExposureTime>& vecImageSequence);
 	void SolveResponse();
@@ -13,11 +14,13 @@ public:
 
 private:
 	float GetWeightedCoefficient(float fIntensity);
-	void GenerateCoefficientMatrix();
+	void GenerateCoefficientMat();
+	void SolveSparseLinearSystem();
 	void GenerateResponse();
 
-	cv::Mat m_matCoefficientMatrix;
-	cv::Mat m_matBiasMatrix;
+	Eigen::SparseMatrix<float> m_spMatCoefficient;
+	Eigen::VectorXf m_vecBias;
+	Eigen::VectorXf m_vecSolution;
 
 	cv::Mat m_matRadiance;
 	cv::Mat m_matResponseCurve;
