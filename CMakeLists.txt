@@ -9,6 +9,7 @@ include_directories(src)
 
 find_package(opencv REQUIRED)
 include_directories(${OpenCV_INCLUDE_DIRS})
+include_directories(/usr/local/include/eigen3)
 
 add_executable(hdr_imaging_cplusplus
         include/hdr_imaging_interface.hpp

@@ -1,6 +1,6 @@
 #pragma once
 #include "../include/hdr_imaging_interface.hpp"
-#include <Eigen/IterativeLinearSolvers>
+#include<Eigen/SparseCholesky>
 
 class CResponseSolver
 {
@@ -21,9 +21,10 @@ private:
 	Eigen::SparseMatrix<float> m_spMatCoefficient;
 	Eigen::VectorXf m_vecBias;
 	Eigen::VectorXf m_vecSolution;
+	Eigen::VectorXf  m_vecResponseCurve;
 
 	cv::Mat m_matRadiance;
-	cv::Mat m_matResponseCurve;
+
 	std::vector<TImageExposureTime> m_vecImageSequence;
 	cv::Size m_sizeImage;
 

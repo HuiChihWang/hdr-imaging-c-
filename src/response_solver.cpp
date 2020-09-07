@@ -9,6 +9,7 @@ void CResponseSolver::SetImageSequence(const std::vector<TImageExposureTime>& ve
 void CResponseSolver::SolveResponse()
 {
 	GenerateCoefficientMat();
+	SolveSparseLinearSystem();
 	GenerateResponse();
 }
 
@@ -79,30 +80,25 @@ void CResponseSolver::GenerateCoefficientMat()
 
 void CResponseSolver::SolveSparseLinearSystem()
 {
-	//TODO: change to SPD solver
-	Eigen::LeastSquaresConjugateGradient<Eigen::SparseMatrix<float>> solver;
-	solver.compute(m_spMatCoefficient);
-	m_vecSolution = solver.solve(m_vecBias);
-
+	Eigen::SimplicialLDLT<Eigen::SparseMatrix<float>> solver;
+	m_vecSolution = solver.compute(m_spMatCoefficient).solve(m_vecBias);
 }
 
 void CResponseSolver::GenerateResponse()
 {
-	Eigen::SparseSolverBase
-
-		m_matResponseCurve = cv::Mat{ m_iZNumber, 1, CV_32F };
+    int iPixTotalNum = m_sizeImage.area();
+    m_vecResponseCurve = Eigen::VectorXf{iPixTotalNum + m_iZNumber};
 
 	for (int index = 0; index < m_iZNumber; ++index) {
-		m_matResponseCurve.at<float>(index, 0) = matSolution.at<float>(index, 0);
+        m_vecResponseCurve(index) = m_vecSolution(index);
 	}
 
 	m_matRadiance = cv::Mat{ m_sizeImage, CV_32F };
-	int iPixTotalNum = m_sizeImage.area();
 	for (int iPixIndex = 0; iPixIndex < iPixTotalNum; iPixIndex++) {
 		int iColIndex = iPixIndex % m_sizeImage.width;
 		int iRowIndex = iPixIndex / m_sizeImage.width;
 
-		m_matRadiance.at<float>(iRowIndex, iColIndex) = matSolution.at<float>(iPixIndex + m_iZNumber, 0);
+		m_matRadiance.at<float>(iRowIndex, iColIndex) = m_vecSolution(iPixIndex + m_iZNumber);
 	}
 }
 
